@@ -22,14 +22,34 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      - name: Extract ZIP if present and build APK
+        run: |
+          ls -la
+          mkdir -p extracted_project
+          for z in *.zip; do
+            if [ -f "$z" ]; then
+              echo "Extracting $z..."
+              unzip -q -o "$z" -d extracted_project
+            fi
+          done
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+          GRADLEW_PATH=$(find . -maxdepth 4 -name "gradlew" | head -n 1)
+          if [ -n "$GRADLEW_PATH" ]; then
+            PROJECT_DIR=$(dirname "$GRADLEW_PATH")
+            echo "Found project at: $PROJECT_DIR"
+            cd "$PROJECT_DIR"
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon
+            APK_REL_PATH=$(find . -path "*/build/outputs/apk/debug/*.apk" | head -n 1)
+            echo "apk_path=$PROJECT_DIR/${APK_REL_PATH#./}" >> "$GITHUB_ENV"
+          else
+            echo "gradlew not found even after extraction."
+            find . -maxdepth 4
+            exit 1
+          fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: RemoteSupportHost-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.apk_path }}
